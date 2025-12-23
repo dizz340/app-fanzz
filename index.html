@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ultimate Website Access</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ font-family:-apple-system,BlinkMacSystemFont;
+ background:#0f172a;
+ color:#fff;
+}
+.page{min-height:100vh;display:none;align-items:center;justify-content:center}
+.page.active{display:flex}
+
+.box{
+ background:rgba(255,255,255,.06);
+ border:1px solid rgba(255,255,255,.15);
+ border-radius:22px;
+ padding:22px;
+ box-shadow:0 20px 40px rgba(0,0,0,.4);
+ animation:fade .35s ease;
+}
+@keyframes fade{
+ from{opacity:0;transform:scale(.95)}
+ to{opacity:1;transform:scale(1)}
+}
+
+input,button{
+ width:100%;
+ padding:14px;
+ margin:6px 0;
+ border-radius:14px;
+ border:none;
+ font-size:15px;
+}
+input{background:#1e293b;color:#fff}
+button{
+ background:#6366f1;
+ color:#fff;
+ font-weight:600;
+ cursor:pointer;
+ transition:.2s;
+}
+button:active{transform:scale(.96)}
+.logout{background:#ef4444}
+.rand{background:#22c55e}
+.locked{background:#374151}
+
+.notify{
+ position:fixed;
+ top:18px;
+ left:50%;
+ transform:translateX(-50%) translateY(-20px);
+ padding:14px 22px;
+ border-radius:18px;
+ font-weight:600;
+ opacity:0;
+ transition:.35s;
+ z-index:9999;
+}
+.notify.show{
+ opacity:1;
+ transform:translateX(-50%) translateY(0);
+}
+
+/* ADMIN */
+.admin-wrap{width:100%;max-width:1300px}
+.admin-header{
+ display:flex;align-items:center;gap:16px;margin-bottom:18px
+}
+.admin-avatar{
+ width:64px;height:64px;border-radius:50%;
+ background:linear-gradient(135deg,#6366f1,#22c55e);
+ display:flex;align-items:center;justify-content:center;
+ font-size:30px;
+}
+.grid{
+ display:grid;
+ grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+ gap:16px;
+}
+.card{
+ background:rgba(255,255,255,.05);
+ border:1px solid rgba(255,255,255,.15);
+ border-radius:20px;
+ padding:16px;
+}
+.status{
+ padding:10px;border-radius:12px;font-weight:600;margin:8px 0
+}
+.open{background:#22c55e33;color:#22c55e}
+.close{background:#ef444433;color:#ef4444}
+</style>
+</head>
+
+<body>
+
+<div id="notify" class="notify"></div>
+
+<!-- LOGIN -->
+<div class="page active" id="login">
+ <div class="box" style="max-width:380px;text-align:center">
+  <h2>🔐 LOGIN KEY</h2>
+  <input id="loginInput" placeholder="Key / Admin">
+  <button onclick="login()">MASUK</button>
+  <button class="rand" onclick="useRandomKey()">🎲 Key Random</button>
+ </div>
+</div>
+
+<!-- USER -->
+<div class="page" id="user">
+ <div class="box" style="max-width:420px;text-align:center">
+  <h2>🌐 WEBSITE</h2>
+  <div id="userList"></div>
+  <button class="logout" onclick="logout()">Logout</button>
+ </div>
+</div>
+
+<!-- ADMIN -->
+<div class="page" id="admin">
+ <div class="box admin-wrap">
+  <div class="admin-header">
+   <div class="admin-avatar">👑</div>
+   <div>
+    <b style="font-size:20px">Admin Account</b><br>
+    <span style="opacity:.7">Full Control Panel</span>
+   </div>
+  </div>
+
+  <!-- KEY CONTROL -->
+  <div class="grid">
+   <div class="card">
+    <b>🔑 KEY</b>
+    <p id="keyInfo">-</p>
+    <button onclick="generateKey()">Generate Key</button>
+    <input type="number" id="expMin" placeholder="Expired (menit)">
+    <button onclick="setExpired()">Set Expired</button>
+    <button onclick="toggleRandom()">Enable / Disable Random</button>
+    <button onclick="resetRandom()">Reset Random</button>
+   </div>
+
+   <div class="card">
+    <b>🔒 GLOBAL LOCK</b>
+    <div id="globalStatus" class="status open">UNLOCK</div>
+    <button onclick="toggleGlobal()">Lock / Unlock Semua</button>
+   </div>
+  </div>
+
+  <!-- WEBSITE -->
+  <h3 style="margin:18px 0">🌍 Website</h3>
+  <div class="grid" id="adminSites"></div>
+
+  <button class="logout" onclick="logout()">Logout</button>
+ </div>
+</div>
+
+<script>
+const ADMIN_PASS="ADMIN123";
+
+/* DATA */
+let keyData=JSON.parse(localStorage.getItem("keyData"))||null;
+let randomUsed=localStorage.getItem("randomUsed")==="1";
+let randomEnabled=localStorage.getItem("randomEnabled")!=="0";
+let globalLock=localStorage.getItem("globalLock")==="1";
+
+let sites=JSON.parse(localStorage.getItem("sites"))||[
+ {name:"Website 1",url:"https://example.com",show:true,lock:false},
+ {name:"Website 2",url:"https://example.com",show:true,lock:false},
+ {name:"Website 3",url:"https://example.com",show:true,lock:false}
+];
+
+/* CORE */
+function show(id){
+ document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+ document.getElementById(id).classList.add("active");
+}
+function notify(msg,type="error"){
+ const n=document.getElementById("notify");
+ n.innerText=msg;
+ n.style.background=type==="success"
+ ?"linear-gradient(135deg,#22c55e,#16a34a)"
+ :"linear-gradient(135deg,#ef4444,#dc2626)";
+ n.classList.add("show");
+ setTimeout(()=>n.classList.remove("show"),2200);
+}
+
+/* LOGIN */
+function login(){
+ const v=loginInput.value.trim();
+ if(v===ADMIN_PASS){
+  show("admin");renderAdmin();return;
+ }
+ if(!keyData) return notify("Key belum ada");
+ if(keyData.exp && Date.now()>keyData.exp)
+  return notify("Key expired");
+ if(v===keyData.key){
+  show("user");renderUser();
+ }else notify("Key salah");
+}
+
+/* RANDOM */
+function useRandomKey(){
+ if(!randomEnabled) return notify("Random dimatikan admin");
+ if(!keyData) return notify("Key belum ada");
+ if(randomUsed) return notify("Random sudah dipakai");
+ randomUsed=true;
+ localStorage.setItem("randomUsed","1");
+ loginInput.value=keyData.key;
+ notify("Key dimasukkan","success");
+}
+
+/* ADMIN */
+function generateKey(){
+ keyData={key:"ULT-"+Math.random().toString(36).substr(2,8).toUpperCase(),exp:null};
+ localStorage.setItem("keyData",JSON.stringify(keyData));
+ randomUsed=false;
+ localStorage.removeItem("randomUsed");
+ renderAdmin();
+}
+function setExpired(){
+ const m=parseInt(expMin.value);
+ if(!m) return;
+ keyData.exp=Date.now()+m*60000;
+ localStorage.setItem("keyData",JSON.stringify(keyData));
+ renderAdmin();
+}
+function toggleRandom(){
+ randomEnabled=!randomEnabled;
+ localStorage.setItem("randomEnabled",randomEnabled?"1":"0");
+ notify("Random "+(randomEnabled?"ON":"OFF"),"success");
+}
+function resetRandom(){
+ randomUsed=false;
+ localStorage.removeItem("randomUsed");
+ notify("Random reset","success");
+}
+function toggleGlobal(){
+ globalLock=!globalLock;
+ localStorage.setItem("globalLock",globalLock?"1":"0");
+ renderAdmin();
+}
+
+/* RENDER */
+function renderAdmin(){
+ keyInfo.innerText=keyData?keyData.key:"-";
+ globalStatus.className="status "+(globalLock?"close":"open");
+ globalStatus.innerText=globalLock?"LOCKED":"UNLOCKED";
+
+ adminSites.innerHTML="";
+ sites.forEach((s,i)=>{
+  adminSites.innerHTML+=`
+  <div class="card">
+   <input value="${s.name}" onchange="sites[${i}].name=this.value;save()">
+   <input value="${s.url}" onchange="sites[${i}].url=this.value;save()">
+   <button onclick="sites[${i}].lock=!sites[${i}].lock;save()">🔐 Lock</button>
+   <button onclick="sites[${i}].show=!sites[${i}].show;save()">👁 Show/Hide</button>
+  </div>`;
+ });
+}
+function renderUser(){
+ userList.innerHTML="";
+ sites.forEach((s,i)=>{
+  if(!s.show) return;
+  userList.innerHTML+=`
+   <button class="${(globalLock||s.lock)?'locked':''}"
+    onclick="openSite(${i})">
+    ${(globalLock||s.lock)?'🔐':'🌍'} ${s.name}
+   </button>`;
+ });
+}
+function openSite(i){
+ if(globalLock||sites[i].lock)
+  return notify("Website dikunci admin");
+ window.open(sites[i].url,"_blank");
+}
+function save(){
+ localStorage.setItem("sites",JSON.stringify(sites));
+ renderUser();
+}
+function logout(){location.reload();}
+</script>
+
+</body>
+</html>
